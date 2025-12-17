@@ -28,6 +28,7 @@ model Product {
   categoryId       String?
   category         Category?       @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   isFeatured       Boolean         @default(false)
+  isActive         Boolean         @default(true)  // Visibility in public store
   createdAt        DateTime        @default(now())
   updatedAt        DateTime        @updatedAt
   
@@ -67,4 +68,37 @@ model ProductBenefit {
   createdAt DateTime @default(now())
   
   @@map("product_benefits")
+}
+
+// Blog Categories
+model BlogCategory {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  slug      String   @unique
+  posts     Post[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("blog_categories")
+}
+
+model Post {
+  id           String        @id @default(uuid())
+  title        String
+  slug         String        @unique
+  excerpt      String?
+  coverImage   String?       // S3 key for cover image
+  content      Json          // Array of content blocks
+  categoryId   String?
+  category     BlogCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  postType     String        @default("article") // article, recipe, tip
+  status       String        @default("draft") // draft, published, archived
+  author       String?
+  readTime     String?
+  views        Int           @default(0)
+  publishedAt  DateTime?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  @@map("posts")
 }

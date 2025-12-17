@@ -1,11 +1,11 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import {
     Plus, Package, Edit, Trash2, Star, TrendingUp, Layers, LogOut,
-    FolderOpen, AlertTriangle, Filter, CheckSquare, Square, X, Loader2
+    FolderOpen, AlertTriangle, Filter, CheckSquare, Square, X, Loader2, Search, Eye, EyeOff
 } from 'lucide-react';
 import { toast, Toaster } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -14,11 +14,27 @@ import { useAuth } from '@/context/AuthContext';
 import { productApi, categoryApi } from '@/services/api';
 import { ConfirmDeleteModal } from '@/components/admin/ConfirmDeleteModal';
 import { CategoryManagerModal } from '@/components/admin/CategoryManagerModal';
+import { AdminShell } from '@/components/admin/AdminShell';
 
 interface Category {
     id: string;
     name: string;
     productCount: number;
+}
+
+// Debounce hook
+function useDebounce<T>(value: T, delay: number): T {
+    const [debouncedValue, setDebouncedValue] = useState<T>(value);
+
+    useEffect(() => {
+        const handler = setTimeout(() => {
+            setDebouncedValue(value);
+        }, delay);
+
+        return () => clearTimeout(handler);
+    }, [value, delay]);
+
+    return debouncedValue;
 }
 
 export default function DashboardPage() {
@@ -28,6 +44,9 @@ export default function DashboardPage() {
     const [loading, setLoading] = useState(true);
     const [selectedProducts, setSelectedProducts] = useState<string[]>([]);
     const [categoryFilter, setCategoryFilter] = useState<string>('all');
+    const [visibilityFilter, setVisibilityFilter] = useState<string>('all');
+    const [searchQuery, setSearchQuery] = useState('');
+    const [togglingVisibility, setTogglingVisibility] = useState<string | null>(null);
     const [categoryModalOpen, setCategoryModalOpen] = useState(false);
     const [bulkAssignOpen, setBulkAssignOpen] = useState(false);
     const [bulkAssigning, setBulkAssigning] = useState(false);
@@ -40,15 +59,19 @@ export default function DashboardPage() {
         productName: '',
     });
 
+    // Debounced search (300ms)
+    const debouncedSearch = useDebounce(searchQuery, 300);
+
+    // Load data when search changes
     useEffect(() => {
         loadData();
-    }, []);
+    }, [debouncedSearch]);
 
     const loadData = async () => {
         try {
             setLoading(true);
             const [productsData, categoriesData] = await Promise.all([
-                productApi.getAll(),
+                productApi.getAll({ search: debouncedSearch || undefined }),
                 categoryApi.getAll().catch(() => []),
             ]);
             setProducts(productsData);
@@ -61,18 +84,48 @@ export default function DashboardPage() {
         }
     };
 
-    // Filter products by category
+    // Filter products by category and visibility (search is handled by API)
     const filteredProducts = useMemo(() => {
-        if (categoryFilter === 'all') return products;
-        if (categoryFilter === 'none') return products.filter(p => !p.categoryId);
-        return products.filter(p => p.categoryId === categoryFilter);
-    }, [products, categoryFilter]);
+        let result = products;
+        if (categoryFilter === 'none') result = result.filter(p => !p.categoryId);
+        else if (categoryFilter !== 'all') result = result.filter(p => p.categoryId === categoryFilter);
+
+        if (visibilityFilter === 'visible') result = result.filter(p => p.isActive !== false);
+        else if (visibilityFilter === 'hidden') result = result.filter(p => p.isActive === false);
+
+        return result;
+    }, [products, categoryFilter, visibilityFilter]);
 
     // Stats
     const totalProducts = products.length;
     const featuredProducts = products.filter((p) => p.isFeatured).length;
     const orphanedProducts = products.filter((p) => !p.categoryId).length;
+    const inactiveProducts = products.filter((p) => p.isActive === false).length;
     const categoriesCount = categories.length;
+
+    // Toggle visibility handler
+    const handleToggleVisibility = async (productId: string, currentStatus: boolean) => {
+        const newStatus = !currentStatus;
+
+        // Optimistic update
+        setProducts(prev => prev.map(p =>
+            p.id === productId ? { ...p, isActive: newStatus } : p
+        ));
+        setTogglingVisibility(productId);
+
+        try {
+            await productApi.toggleVisibility(productId, newStatus);
+            toast.success(newStatus ? 'Producto visible en tienda' : 'Producto oculto de la tienda');
+        } catch (error) {
+            // Revert on error
+            setProducts(prev => prev.map(p =>
+                p.id === productId ? { ...p, isActive: currentStatus } : p
+            ));
+            toast.error('Error al cambiar visibilidad');
+        } finally {
+            setTogglingVisibility(null);
+        }
+    };
 
     // Selection handlers
     const isAllSelected = filteredProducts.length > 0 &&
@@ -161,7 +214,7 @@ export default function DashboardPage() {
     };
 
     return (
-        <>
+        <AdminShell>
             <Toaster position="top-right" richColors />
             <div className="min-h-screen bg-gray-50 p-8">
                 {/* Header */}
@@ -268,28 +321,63 @@ export default function DashboardPage() {
 
                 {/* Products Section */}
                 <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-                    {/* Table Header with Filter */}
-                    <div className="p-6 border-b border-gray-100 flex items-center justify-between">
-                        <h2 className="text-xl font-semibold text-gray-900">
-                            Productos ({filteredProducts.length})
-                        </h2>
+                    {/* Table Header with Search and Filter */}
+                    <div className="p-6 border-b border-gray-100">
+                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                            <h2 className="text-xl font-semibold text-gray-900">
+                                Productos ({filteredProducts.length})
+                            </h2>
 
-                        {/* Category Filter */}
-                        <div className="flex items-center gap-2">
-                            <Filter className="w-4 h-4 text-gray-500" />
-                            <select
-                                value={categoryFilter}
-                                onChange={(e) => setCategoryFilter(e.target.value)}
-                                className="px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
-                            >
-                                <option value="all">Todas las categorías</option>
-                                <option value="none">⚠️ Sin categoría</option>
-                                {categories.map(cat => (
-                                    <option key={cat.id} value={cat.id}>
-                                        {cat.name} ({cat.productCount})
-                                    </option>
-                                ))}
-                            </select>
+                            <div className="flex items-center gap-3 flex-wrap">
+                                {/* Search Input */}
+                                <div className="relative">
+                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                    <input
+                                        type="text"
+                                        value={searchQuery}
+                                        onChange={(e) => setSearchQuery(e.target.value)}
+                                        placeholder="Buscar productos..."
+                                        className="pl-9 pr-4 py-2 w-48 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                                    />
+                                    {searchQuery && (
+                                        <button
+                                            onClick={() => setSearchQuery('')}
+                                            className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600"
+                                        >
+                                            <X className="w-3 h-3" />
+                                        </button>
+                                    )}
+                                </div>
+
+                                {/* Category Filter */}
+                                <div className="flex items-center gap-2">
+                                    <Filter className="w-4 h-4 text-gray-500" />
+                                    <select
+                                        value={categoryFilter}
+                                        onChange={(e) => setCategoryFilter(e.target.value)}
+                                        className="px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                                    >
+                                        <option value="all">Todas las categorías</option>
+                                        <option value="none">⚠️ Sin categoría</option>
+                                        {categories.map(cat => (
+                                            <option key={cat.id} value={cat.id}>
+                                                {cat.name} ({cat.productCount})
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                {/* Visibility Filter */}
+                                <select
+                                    value={visibilityFilter}
+                                    onChange={(e) => setVisibilityFilter(e.target.value)}
+                                    className="px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                                >
+                                    <option value="all">Todos</option>
+                                    <option value="visible">👁️ Visibles</option>
+                                    <option value="hidden">🚫 Ocultos</option>
+                                </select>
+                            </div>
                         </div>
                     </div>
 
@@ -387,10 +475,27 @@ export default function DashboardPage() {
                                         )}
                                     </div>
 
-                                    {/* Status */}
+                                    {/* Visibility Toggle */}
                                     <div className="col-span-2">
+                                        <button
+                                            onClick={() => handleToggleVisibility(product.id, product.isActive !== false)}
+                                            disabled={togglingVisibility === product.id}
+                                            className={`relative inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${product.isActive !== false
+                                                ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                                                : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                                                }`}
+                                        >
+                                            {togglingVisibility === product.id ? (
+                                                <Loader2 className="w-3 h-3 animate-spin" />
+                                            ) : product.isActive !== false ? (
+                                                <Eye className="w-3 h-3" />
+                                            ) : (
+                                                <EyeOff className="w-3 h-3" />
+                                            )}
+                                            {product.isActive !== false ? 'Visible' : 'Oculto'}
+                                        </button>
                                         {product.isFeatured && (
-                                            <span className="inline-flex items-center gap-1 px-2 py-1 bg-yellow-100 text-yellow-700 rounded-full text-xs font-medium">
+                                            <span className="ml-2 inline-flex items-center gap-1 px-2 py-1 bg-yellow-100 text-yellow-700 rounded-full text-xs font-medium">
                                                 <Star className="w-3 h-3" /> Destacado
                                             </span>
                                         )}
@@ -540,6 +645,6 @@ export default function DashboardPage() {
                     onCategoryChange={loadData}
                 />
             </div>
-        </>
+        </AdminShell>
     );
 }

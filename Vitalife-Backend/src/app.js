@@ -6,7 +6,9 @@ const { config } = require('./config');
 const productRoutes = require('./routes/productRoutes');
 const categoryRoutes = require('./routes/categoryRoutes');
 const storeRoutes = require('./routes/storeRoutes');
-
+const postRoutes = require('./routes/postRoutes');
+const uploadRoutes = require('./routes/uploadRoutes');
+const blogCategoryRoutes = require('./routes/blogCategoryRoutes');
 const app = express();
 
 // Security - Helmet (Hide X-Powered-By, prevent XSS)
@@ -74,6 +76,9 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use('/api/products', productRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/store', storeRoutes);
+app.use('/api/posts', postRoutes);
+app.use('/api/uploads', uploadRoutes);
+app.use('/api/blog/categories', blogCategoryRoutes);
 
 // Health check
 app.get('/health', (req, res) => {

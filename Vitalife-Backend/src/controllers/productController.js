@@ -8,7 +8,26 @@ const prisma = new PrismaClient();
 class ProductController {
     static async getAllProducts(req, res) {
         try {
+            const { search, categoryId } = req.query;
+
+            // Build where clause
+            const where = {};
+
+            // Search by name (case-insensitive)
+            if (search && search.trim()) {
+                where.name = {
+                    contains: search.trim(),
+                    mode: 'insensitive',
+                };
+            }
+
+            // Filter by category
+            if (categoryId) {
+                where.categoryId = categoryId;
+            }
+
             const products = await prisma.product.findMany({
+                where,
                 include: {
                     images: true,
                     flavors: true,
@@ -409,6 +428,41 @@ class ProductController {
         } catch (error) {
             console.error('Error bulk updating products:', error);
             return res.status(500).json({ error: 'Failed to bulk update products' });
+        }
+    }
+
+    // PATCH /api/products/:id/visibility - Toggle product visibility
+    static async toggleVisibility(req, res) {
+        try {
+            const { id } = req.params;
+            const { isActive } = req.body;
+
+            console.log(`🔄 Toggle visibility for product ${id}: isActive=${isActive}`);
+
+            // Validate product exists
+            const product = await prisma.product.findUnique({
+                where: { id }
+            });
+
+            if (!product) {
+                return res.status(404).json({ error: 'Product not found' });
+            }
+
+            // Update visibility
+            const updatedProduct = await prisma.product.update({
+                where: { id },
+                data: { isActive: isActive === true || isActive === 'true' }
+            });
+
+            console.log(`✅ Product ${id} visibility set to ${updatedProduct.isActive}`);
+
+            return res.json({
+                message: updatedProduct.isActive ? 'Product is now visible' : 'Product is now hidden',
+                isActive: updatedProduct.isActive
+            });
+        } catch (error) {
+            console.error('Error toggling visibility:', error);
+            return res.status(500).json({ error: 'Failed to toggle visibility' });
         }
     }
 }

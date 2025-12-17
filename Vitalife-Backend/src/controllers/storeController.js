@@ -48,8 +48,10 @@ class StoreController {
             const { page, limit, search, category, featured } = validation.data;
             const skip = (page - 1) * limit;
 
-            // Build where clause
-            const where = {};
+            // Build where clause - ALWAYS filter active products for public store
+            const where = {
+                isActive: true,  // CRITICAL: Only show active products to public
+            };
 
             // Search filter (sanitized)
             if (search) {

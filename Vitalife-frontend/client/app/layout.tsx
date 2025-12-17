@@ -1,41 +1,41 @@
-import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
-import "./globals.css";
-import { Header } from "@/components/layout/Header";
-import { Footer } from "@/components/layout/Footer";
-import { ListProvider } from "@/context/ListContext";
+import type { Metadata } from 'next';
+import { Inter, Playfair_Display } from 'next/font/google';
+import './globals.css';
+import { Header } from '@/components/layout/Header';
+import { Footer } from '@/components/layout/Footer';
+import { ListProvider } from '@/context/ListContext';
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
+const inter = Inter({
+    subsets: ['latin'],
+    variable: '--font-sans',
+    display: 'swap',
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
+const playfairDisplay = Playfair_Display({
+    subsets: ['latin'],
+    variable: '--font-serif',
+    display: 'swap',
 });
 
 export const metadata: Metadata = {
-  title: "Club Vitalife - Tu Transformación Comienza Aquí",
-  description: "Distribuidor Independiente de Herbalife. Productos premium de nutrición y bienestar con asesoría personalizada para alcanzar tus objetivos de salud.",
+    title: 'Club Vitalife | Distribuidor Independiente Herbalife',
+    description: 'Tu camino hacia un estilo de vida más saludable comienza aquí. Productos de nutrición premium y asesoría personalizada.',
 };
 
 export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
-  return (
-    <html lang="es">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
-        <ListProvider>
-          <Header />
-          {children}
-          <Footer />
-        </ListProvider>
-      </body>
-    </html>
-  );
+    children,
+}: {
+    children: React.ReactNode;
+}) {
+    return (
+        <html lang="es" className={`${inter.variable} ${playfairDisplay.variable}`}>
+            <body className="font-sans antialiased">
+                <ListProvider>
+                    <Header />
+                    {children}
+                    <Footer />
+                </ListProvider>
+            </body>
+        </html>
+    );
 }

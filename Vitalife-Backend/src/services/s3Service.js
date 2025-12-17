@@ -40,6 +40,12 @@ class S3Service {
         return presignedUrl;
     }
 
+    // Long-duration presigned URL for ISR/cached content (1 week)
+    static async getLongPresignedUrl(key) {
+        const ONE_WEEK = 604800; // 7 days in seconds
+        return this.getPresignedUrl(key, ONE_WEEK);
+    }
+
     static async deleteFile(key) {
         // Extract key if full URL was passed
         if (key.includes('/')) {

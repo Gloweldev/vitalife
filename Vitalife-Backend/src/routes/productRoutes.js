@@ -44,6 +44,13 @@ router.delete(
     ProductController.deleteProduct
 );
 
+// Toggle product visibility (no full validation needed)
+router.patch(
+    '/:id/visibility',
+    verifyFirebaseToken,
+    ProductController.toggleVisibility
+);
+
 // Bulk update category for multiple products
 router.patch(
     '/bulk-update',
