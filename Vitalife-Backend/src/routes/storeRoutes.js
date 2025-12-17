@@ -44,9 +44,26 @@ const bulkRateLimiter = rateLimit({
 // Apply rate limiters
 router.use(storeRateLimiter);
 
-// Public endpoints
+// Public endpoints - Products
 router.get('/products', bulkRateLimiter, StoreController.getProducts);
 router.get('/products/:slug', StoreController.getProductBySlug);
 router.get('/categories', StoreController.getCategories);
+
+// Public endpoints - Blog
+router.get('/posts', bulkRateLimiter, StoreController.getPublishedPosts);
+router.get('/posts/product-preview/:id', StoreController.getProductPreview); // Must be before :slug
+router.get('/posts/:slug', StoreController.getPostBySlug);
+router.get('/blog-categories', StoreController.getBlogCategories);
+
+// View registration with stricter rate limiting (prevent bot abuse)
+const viewRateLimiter = rateLimit({
+    windowMs: 60 * 1000, // 1 minute
+    max: 10, // 10 views per minute per IP (very generous for real users)
+    message: { error: 'Too many view requests', retryAfter: 60 },
+    standardHeaders: true,
+    legacyHeaders: false,
+    keyGenerator: (req) => req.headers['x-forwarded-for']?.split(',')[0] || req.ip,
+});
+router.post('/posts/:slug/view', viewRateLimiter, StoreController.registerPostView);
 
 module.exports = router;

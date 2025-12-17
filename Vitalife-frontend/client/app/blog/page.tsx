@@ -1,5 +1,5 @@
 import { Metadata } from 'next';
-import { blogPosts } from '@/lib/mock-blog';
+import { getPublicPosts, getBlogCategories, formatDate, BlogPost } from '@/services/blogApi';
 import { BlogHero } from '@/components/blog/BlogHero';
 import { BlogCard } from '@/components/blog/BlogCard';
 
@@ -8,8 +8,30 @@ export const metadata: Metadata = {
     description: 'Descubre recetas saludables, consejos de nutrición y rutinas de ejercicio para transformar tu estilo de vida.',
 };
 
-export default function BlogPage() {
-    const [heroPost, ...restPosts] = blogPosts;
+// Helper to adapt API response to component format
+function adaptPost(post: BlogPost) {
+    return {
+        slug: post.slug,
+        title: post.title,
+        category: post.category?.name || 'General',
+        coverImage: post.coverImage || '/placeholder-blog.jpg',
+        author: post.author || 'Club Vitalife',
+        publishedAt: post.publishedAt || new Date().toISOString(),
+        excerpt: post.excerpt || '',
+        readTime: post.readTime || '5 min',
+        content: post.content || [],
+    };
+}
+
+export default async function BlogPage() {
+    // Fetch real data from API
+    const [postsResponse, categories] = await Promise.all([
+        getPublicPosts({ limit: 12 }),
+        getBlogCategories(),
+    ]);
+
+    const posts = postsResponse.posts.map(adaptPost);
+    const [heroPost, ...restPosts] = posts;
 
     return (
         <main className="min-h-screen bg-gradient-to-b from-gray-50 via-white to-gray-50">
@@ -28,25 +50,21 @@ export default function BlogPage() {
                 </div>
             </section>
 
-            {/* Category Navigation */}
+            {/* Category Navigation - Dynamic from API */}
             <section className="sticky top-0 z-20 bg-white/80 backdrop-blur-lg border-b border-gray-100">
                 <div className="container mx-auto px-4 py-4">
                     <nav className="flex items-center justify-center gap-2 overflow-x-auto">
                         <button className="px-5 py-2 rounded-full bg-gray-900 text-white text-sm font-medium transition-all whitespace-nowrap">
                             Todos
                         </button>
-                        <button className="px-5 py-2 rounded-full bg-white text-gray-700 text-sm font-medium border border-gray-200 hover:border-green-600 hover:text-green-600 transition-all whitespace-nowrap">
-                            Recetas
-                        </button>
-                        <button className="px-5 py-2 rounded-full bg-white text-gray-700 text-sm font-medium border border-gray-200 hover:border-green-600 hover:text-green-600 transition-all whitespace-nowrap">
-                            Nutrición
-                        </button>
-                        <button className="px-5 py-2 rounded-full bg-white text-gray-700 text-sm font-medium border border-gray-200 hover:border-green-600 hover:text-green-600 transition-all whitespace-nowrap">
-                            Fitness
-                        </button>
-                        <button className="px-5 py-2 rounded-full bg-white text-gray-700 text-sm font-medium border border-gray-200 hover:border-green-600 hover:text-green-600 transition-all whitespace-nowrap">
-                            Bienestar
-                        </button>
+                        {categories.map((cat) => (
+                            <button
+                                key={cat.id}
+                                className="px-5 py-2 rounded-full bg-white text-gray-700 text-sm font-medium border border-gray-200 hover:border-green-600 hover:text-green-600 transition-all whitespace-nowrap"
+                            >
+                                {cat.name}
+                            </button>
+                        ))}
                     </nav>
                 </div>
             </section>
@@ -57,6 +75,13 @@ export default function BlogPage() {
                 {heroPost && (
                     <div className="mb-12 md:mb-16">
                         <BlogHero post={heroPost} />
+                    </div>
+                )}
+
+                {/* Empty State */}
+                {posts.length === 0 && (
+                    <div className="text-center py-20">
+                        <p className="text-gray-500 text-lg">No hay artículos publicados aún.</p>
                     </div>
                 )}
 
@@ -92,7 +117,7 @@ export default function BlogPage() {
                 </div>
 
                 {/* More Posts Section */}
-                {blogPosts.length > 6 && (
+                {postsResponse.pagination.totalPages > 1 && (
                     <div className="mt-16 text-center">
                         <button className="inline-flex items-center gap-2 px-8 py-4 bg-white text-gray-900 font-semibold rounded-full border-2 border-gray-200 hover:border-gray-900 transition-all shadow-lg shadow-black/5 hover:shadow-xl">
                             Cargar Más Artículos
@@ -132,7 +157,7 @@ export default function BlogPage() {
                 </div>
             </section>
 
-            {/* Trending Topics Sidebar-like Section */}
+            {/* Trending Topics */}
             <section className="bg-white py-16">
                 <div className="container mx-auto px-4">
                     <div className="max-w-4xl mx-auto">

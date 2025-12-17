@@ -45,6 +45,39 @@ async function generateUniqueSlug(baseSlug, excludeId = null) {
     return slug;
 }
 
+// Helper: Extract S3 key from URL (handles presigned URLs, full URLs, and raw keys)
+function extractS3Key(urlOrKey) {
+    if (!urlOrKey) return null;
+
+    // If it's already just a key (no http), return as-is
+    if (!urlOrKey.startsWith('http://') && !urlOrKey.startsWith('https://')) {
+        return urlOrKey;
+    }
+
+    try {
+        // Parse the URL to remove query params (presigned signature)
+        const url = new URL(urlOrKey);
+        let path = url.pathname;
+
+        // Remove leading slash
+        if (path.startsWith('/')) {
+            path = path.substring(1);
+        }
+
+        // Remove bucket name if present at start (e.g., "vitalife-dev/blog/covers/...")
+        const bucketName = process.env.AWS_BUCKET_NAME || 'vitalife-dev';
+        if (path.startsWith(bucketName + '/')) {
+            path = path.substring(bucketName.length + 1);
+        }
+
+        return path || null;
+    } catch (e) {
+        // If URL parsing fails, return original
+        console.warn('Failed to parse URL for S3 key extraction:', urlOrKey);
+        return urlOrKey;
+    }
+}
+
 // Helper: Sign presigned URLs for a post
 async function signPostUrls(post) {
     if (!post) return post;
@@ -241,7 +274,7 @@ async function createPost(req, res) {
                 title,
                 slug,
                 excerpt,
-                coverImage,
+                coverImage: extractS3Key(coverImage),
                 content: content || [],
                 category,
                 postType,
@@ -305,7 +338,7 @@ async function updatePost(req, res) {
                 title: title || existingPost.title,
                 slug,
                 excerpt: excerpt !== undefined ? excerpt : existingPost.excerpt,
-                coverImage: coverImage !== undefined ? coverImage : existingPost.coverImage,
+                coverImage: coverImage !== undefined ? extractS3Key(coverImage) : existingPost.coverImage,
                 content: content !== undefined ? content : existingPost.content,
                 category: category !== undefined ? category : existingPost.category,
                 postType: postType || existingPost.postType,

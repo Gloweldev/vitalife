@@ -2,25 +2,19 @@ import { Metadata } from 'next';
 import Image from 'next/image';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { blogPosts, getPostBySlug, formatDate } from '@/lib/mock-blog';
+import { getPostBySlug, formatDate } from '@/services/blogApi';
 import { PostRenderer } from '@/components/blog/PostRenderer';
-import { ArrowLeft, Clock, User } from 'lucide-react';
+import { ViewTracker } from '@/components/blog/ViewTracker';
+import { ArrowLeft, Clock, User, Eye } from 'lucide-react';
 
 interface BlogPostPageProps {
     params: Promise<{ slug: string }>;
 }
 
-// Generate static params for all posts
-export async function generateStaticParams() {
-    return blogPosts.map((post) => ({
-        slug: post.slug,
-    }));
-}
-
-// Generate metadata for SEO
+// Generate metadata for SEO with real data
 export async function generateMetadata({ params }: BlogPostPageProps): Promise<Metadata> {
     const { slug } = await params;
-    const post = getPostBySlug(slug);
+    const post = await getPostBySlug(slug);
 
     if (!post) {
         return {
@@ -30,28 +24,39 @@ export async function generateMetadata({ params }: BlogPostPageProps): Promise<M
 
     return {
         title: `${post.title} | Blog Vitalife`,
-        description: post.excerpt,
+        description: post.excerpt || '',
         openGraph: {
             title: post.title,
-            description: post.excerpt,
-            images: [post.coverImage],
+            description: post.excerpt || '',
+            images: post.coverImage ? [post.coverImage] : [],
             type: 'article',
             publishedTime: post.publishedAt,
-            authors: [post.author],
+            authors: post.author ? [post.author] : [],
+        },
+        twitter: {
+            card: 'summary_large_image',
+            title: post.title,
+            description: post.excerpt || '',
+            images: post.coverImage ? [post.coverImage] : [],
         },
     };
 }
 
 export default async function BlogPostPage({ params }: BlogPostPageProps) {
     const { slug } = await params;
-    const post = getPostBySlug(slug);
+    const post = await getPostBySlug(slug);
 
     if (!post) {
         notFound();
     }
 
+    const categoryName = post.category?.name || 'General';
+    const authorName = post.author || 'Club Vitalife';
+
     return (
         <main className="min-h-screen bg-white">
+            {/* View Tracker - Client component for analytics */}
+            <ViewTracker slug={slug} />
             {/* Back Navigation */}
             <div className="bg-gray-50 border-b border-gray-200">
                 <div className="container mx-auto px-4 py-4">
@@ -70,7 +75,7 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
                 <header className="container mx-auto px-4 py-12 md:py-16 text-center max-w-4xl">
                     {/* Category Badge */}
                     <span className="inline-block bg-green-100 text-green-700 text-sm font-semibold px-4 py-1.5 rounded-full mb-6">
-                        {post.category}
+                        {categoryName}
                     </span>
 
                     {/* Title */}
@@ -82,12 +87,18 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
                     <div className="flex flex-wrap items-center justify-center gap-6 text-gray-500">
                         <div className="flex items-center gap-2">
                             <User className="w-4 h-4" />
-                            <span>{post.author}</span>
+                            <span>{authorName}</span>
                         </div>
                         <div className="flex items-center gap-2">
                             <Clock className="w-4 h-4" />
-                            <span>{post.readTime} de lectura</span>
+                            <span>{post.readTime || '5 min'} de lectura</span>
                         </div>
+                        {post.views !== undefined && (
+                            <div className="flex items-center gap-2">
+                                <Eye className="w-4 h-4" />
+                                <span>{post.views.toLocaleString()} vistas</span>
+                            </div>
+                        )}
                         <time dateTime={post.publishedAt} className="text-gray-500">
                             {formatDate(post.publishedAt)}
                         </time>
@@ -95,23 +106,28 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
                 </header>
 
                 {/* Cover Image */}
-                <div className="container mx-auto px-4 mb-12">
-                    <div className="relative w-full h-[300px] md:h-[400px] lg:h-[500px] rounded-2xl overflow-hidden shadow-2xl max-w-5xl mx-auto">
-                        <Image
-                            src={post.coverImage}
-                            alt={post.title}
-                            fill
-                            className="object-cover"
-                            sizes="(max-width: 1280px) 100vw, 1200px"
-                            priority
-                        />
+                {post.coverImage && (
+                    <div className="container mx-auto px-4 mb-12">
+                        <div className="relative w-full h-[300px] md:h-[400px] lg:h-[500px] rounded-2xl overflow-hidden shadow-2xl max-w-5xl mx-auto">
+                            <Image
+                                src={post.coverImage}
+                                alt={post.title}
+                                fill
+                                className="object-cover"
+                                sizes="(max-width: 1280px) 100vw, 1200px"
+                                priority
+                            />
+                        </div>
                     </div>
-                </div>
+                )}
 
                 {/* Article Content */}
                 <div className="container mx-auto px-4 pb-20">
                     <div className="max-w-3xl mx-auto">
-                        <PostRenderer content={post.content} />
+                        {/* Render content blocks */}
+                        {post.content && Array.isArray(post.content) && (
+                            <PostRenderer content={post.content} />
+                        )}
 
                         {/* Share & CTA Section */}
                         <div className="mt-16 pt-10 border-t border-gray-200">
@@ -123,7 +139,7 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
                                     </div>
                                     <div className="text-center sm:text-left">
                                         <h3 className="text-xl font-bold text-gray-900 mb-2">
-                                            {post.author}
+                                            {authorName}
                                         </h3>
                                         <p className="text-gray-600 mb-4">
                                             Distribuidor Independiente Herbalife. Te ayudo a alcanzar tus metas de bienestar con un enfoque personalizado.
@@ -140,7 +156,7 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
                                 </div>
                             </div>
 
-                            {/* Related Posts Placeholder */}
+                            {/* Related Posts CTA */}
                             <div className="text-center">
                                 <Link
                                     href="/blog"

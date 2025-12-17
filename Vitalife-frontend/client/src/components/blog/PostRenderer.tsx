@@ -2,24 +2,32 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
-import { ContentBlock } from '@/lib/mock-blog';
-import { MessageCircle } from 'lucide-react';
+import { MessageCircle, Package } from 'lucide-react';
 import { siteConfig } from '@/lib/siteConfig';
+import { useEffect, useState } from 'react';
+
+// Content block types matching backend
+interface ContentBlock {
+    type: 'text' | 'heading' | 'image' | 'product' | 'paragraph' | 'list' | 'product-widget';
+    content?: string;
+    text?: string;
+    url?: string;
+    alt?: string;
+    caption?: string;
+    productId?: string;
+    level?: 1 | 2 | 3;
+    items?: string[];
+}
 
 interface PostRendererProps {
     content: ContentBlock[];
 }
 
-// Mock product data for the widget (in real app, fetch from API)
-const mockProducts: Record<string, { name: string; image: string; slug: string }> = {
-    '4dc14927-c8c7-4d0d-a6d4-d767d555c4be': {
-        name: 'Formula 1 - Batido Nutricional',
-        image: 'https://images.unsplash.com/photo-1622597467836-f3285f2131b8?w=400&q=80',
-        slug: 'producto-1'
-    }
-};
-
 export function PostRenderer({ content }: PostRendererProps) {
+    if (!content || !Array.isArray(content)) {
+        return null;
+    }
+
     return (
         <div className="prose prose-lg prose-gray max-w-none">
             {content.map((block, index) => (
@@ -31,36 +39,52 @@ export function PostRenderer({ content }: PostRendererProps) {
 
 function RenderBlock({ block }: { block: ContentBlock }) {
     switch (block.type) {
+        case 'text':
         case 'paragraph':
             return (
                 <p className="text-gray-700 leading-relaxed mb-6 text-lg">
-                    {block.content}
+                    {block.text || block.content}
                 </p>
             );
 
         case 'heading':
-            const HeadingTag = `h${block.level || 2}` as keyof JSX.IntrinsicElements;
-            return (
-                <HeadingTag className="text-gray-900 font-bold mt-10 mb-4">
-                    {block.content}
-                </HeadingTag>
-            );
+            const level = block.level || 2;
+            const headingText = block.text || block.content;
+            const headingClasses = {
+                1: 'text-3xl mt-12 mb-6',
+                2: 'text-2xl mt-10 mb-4',
+                3: 'text-xl mt-8 mb-3',
+            };
+            const className = `text-gray-900 font-bold ${headingClasses[level as 1 | 2 | 3] || headingClasses[2]}`;
+
+            if (level === 1) {
+                return <h1 className={className}>{headingText}</h1>;
+            } else if (level === 3) {
+                return <h3 className={className}>{headingText}</h3>;
+            }
+            return <h2 className={className}>{headingText}</h2>;
 
         case 'image':
+            const imageUrl = block.url;
+            const imageAlt = block.alt || block.caption || block.content || 'Imagen del artículo';
+            const imageCaption = block.caption || block.content;
+
+            if (!imageUrl) return null;
+
             return (
                 <figure className="my-8">
                     <div className="relative aspect-video rounded-xl overflow-hidden shadow-lg">
                         <Image
-                            src={block.url || ''}
-                            alt={block.content || 'Imagen del artículo'}
+                            src={imageUrl}
+                            alt={imageAlt}
                             fill
                             className="object-cover"
                             sizes="(max-width: 768px) 100vw, 800px"
                         />
                     </div>
-                    {block.content && (
+                    {imageCaption && (
                         <figcaption className="text-center text-sm text-gray-500 mt-3 italic">
-                            {block.content}
+                            {imageCaption}
                         </figcaption>
                     )}
                 </figure>
@@ -77,18 +101,82 @@ function RenderBlock({ block }: { block: ContentBlock }) {
                 </ul>
             );
 
+        case 'product':
         case 'product-widget':
-            return <ProductWidget productId={block.productId || ''} />;
+            return <BlogProductWidget productId={block.productId || ''} />;
 
         default:
+            console.warn('Unknown block type:', block.type);
             return null;
     }
 }
 
-function ProductWidget({ productId }: { productId: string }) {
-    const product = mockProducts[productId];
+// Product preview type
+interface ProductPreview {
+    id: string;
+    name: string;
+    slug: string;
+    shortDescription?: string;
+    category?: string | null;
+    image?: string | null;
+}
 
-    if (!product) {
+/**
+ * Blog Product Widget - Fetches product data from API
+ * Client-side component that fetches product preview data
+ */
+function BlogProductWidget({ productId }: { productId: string }) {
+    const [product, setProduct] = useState<ProductPreview | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(false);
+
+    useEffect(() => {
+        if (!productId) {
+            setLoading(false);
+            setError(true);
+            return;
+        }
+
+        const fetchProduct = async () => {
+            try {
+                const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+                const response = await fetch(`${API_URL}/store/posts/product-preview/${productId}`);
+
+                if (!response.ok) {
+                    throw new Error('Product not found');
+                }
+
+                const data = await response.json();
+                setProduct(data);
+            } catch (err) {
+                console.error('Error fetching product preview:', err);
+                setError(true);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchProduct();
+    }, [productId]);
+
+    // Loading state
+    if (loading) {
+        return (
+            <div className="not-prose my-8 bg-gray-50 border border-gray-200 rounded-2xl p-6 animate-pulse">
+                <div className="flex flex-col sm:flex-row items-center gap-6">
+                    <div className="w-32 h-32 bg-gray-200 rounded-xl" />
+                    <div className="flex-1 space-y-4">
+                        <div className="h-4 bg-gray-200 rounded w-1/4" />
+                        <div className="h-6 bg-gray-200 rounded w-3/4" />
+                        <div className="h-10 bg-gray-200 rounded w-1/2" />
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    // Error or no product
+    if (error || !product) {
         return null;
     }
 
@@ -101,13 +189,19 @@ function ProductWidget({ productId }: { productId: string }) {
                 {/* Product Image */}
                 <div className="relative w-32 h-32 flex-shrink-0">
                     <div className="absolute inset-0 bg-white rounded-xl shadow-md overflow-hidden">
-                        <Image
-                            src={product.image}
-                            alt={product.name}
-                            fill
-                            className="object-cover"
-                            sizes="128px"
-                        />
+                        {product.image ? (
+                            <Image
+                                src={product.image}
+                                alt={product.name}
+                                fill
+                                className="object-cover"
+                                sizes="128px"
+                            />
+                        ) : (
+                            <div className="w-full h-full flex items-center justify-center bg-gray-100">
+                                <Package className="w-10 h-10 text-gray-300" />
+                            </div>
+                        )}
                     </div>
                 </div>
 
@@ -116,9 +210,14 @@ function ProductWidget({ productId }: { productId: string }) {
                     <span className="text-xs font-semibold text-green-600 uppercase tracking-wide">
                         Producto Recomendado
                     </span>
-                    <h4 className="text-xl font-bold text-gray-900 mt-1 mb-3">
+                    <h4 className="text-xl font-bold text-gray-900 mt-1 mb-2">
                         {product.name}
                     </h4>
+                    {product.shortDescription && (
+                        <p className="text-sm text-gray-600 mb-3 line-clamp-2">
+                            {product.shortDescription}
+                        </p>
+                    )}
 
                     <div className="flex flex-col sm:flex-row gap-3">
                         <Link

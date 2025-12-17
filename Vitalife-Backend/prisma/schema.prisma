@@ -96,9 +96,42 @@ model Post {
   author       String?
   readTime     String?
   views        Int           @default(0)
+  postViews    PostView[]
   publishedAt  DateTime?
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
 
   @@map("posts")
 }
+
+// Post Views Analytics - tracks individual views with deduplication
+model PostView {
+  id           String   @id @default(uuid())
+  postId       String
+  post         Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  
+  // Deduplication
+  fingerprint  String   // Browser fingerprint for deduplication
+  viewDate     String   // Date string (YYYY-MM-DD) for daily deduplication
+  
+  // Visitor metadata
+  ip           String?  // Anonymized IP (last octet zeroed)
+  userAgent    String?
+  referrer     String?
+  country      String?
+  city         String?
+  device       String?  // mobile, tablet, desktop
+  browser      String?
+  os           String?
+  
+  // Timestamps
+  viewedAt     DateTime @default(now())
+
+  // Unique constraint: same fingerprint can only count once per post per day
+  @@unique([postId, fingerprint, viewDate])
+  @@index([postId])
+  @@index([viewedAt])
+  @@index([fingerprint])
+  @@map("post_views")
+}
+

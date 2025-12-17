@@ -30,6 +30,14 @@ class S3Service {
     }
 
     static async getPresignedUrl(key, expiresIn = 3600) {
+        // If key is null/undefined, return null
+        if (!key) return null;
+
+        // If already a full URL (presigned or public), return as-is
+        if (key.startsWith('http://') || key.startsWith('https://')) {
+            return key;
+        }
+
         // Generate presigned URL for private bucket access
         const command = new GetObjectCommand({
             Bucket: config.aws.bucketName,
@@ -42,6 +50,14 @@ class S3Service {
 
     // Long-duration presigned URL for ISR/cached content (1 week)
     static async getLongPresignedUrl(key) {
+        // If key is null/undefined, return null
+        if (!key) return null;
+
+        // If already a full URL, return as-is
+        if (key.startsWith('http://') || key.startsWith('https://')) {
+            return key;
+        }
+
         const ONE_WEEK = 604800; // 7 days in seconds
         return this.getPresignedUrl(key, ONE_WEEK);
     }
